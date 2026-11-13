@@ -53,6 +53,14 @@ export default defineConfig(({ envMode }) => {
       },
     },
     source: {
+      define: {
+        'import.meta.env.VITE_MYCLAUDE_SUPPORT_URL': JSON.stringify(
+          env.rawPublicVars.VITE_MYCLAUDE_SUPPORT_URL ?? ''
+        ),
+        'import.meta.env.VITE_MYCLAUDE_STATUS_URL': JSON.stringify(
+          env.rawPublicVars.VITE_MYCLAUDE_STATUS_URL ?? ''
+        ),
+      },
       entry: {
         index: './src/main.tsx',
       },

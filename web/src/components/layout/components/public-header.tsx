@@ -47,6 +47,7 @@ type AuthPromptTarget = {
 
 export interface PublicHeaderProps {
   navLinks?: TopNavLink[]
+  preferProvidedNavLinks?: boolean
   mobileLinks?: TopNavLink[]
   navContent?: React.ReactNode
   showThemeSwitch?: boolean
@@ -97,7 +98,10 @@ export function PublicHeader(props: PublicHeaderProps) {
   const user = auth.user
   const isAuthenticated = !!user
   const displaySiteName = customSiteName || systemName
-  const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
+  const links =
+    !props.preferProvidedNavLinks && dynamicLinks.length > 0
+      ? dynamicLinks
+      : navLinks
 
   let logoContent: ReactNode = (
     <HeaderLogo
@@ -302,6 +306,7 @@ export function PublicHeader(props: PublicHeaderProps) {
                 />
               )}
 
+              {props.rightContent}
               {showAuthButtons && (
                 <>
                   <div className='bg-border/40 mx-1 h-4 w-px' />
@@ -312,7 +317,9 @@ export function PublicHeader(props: PublicHeaderProps) {
 
             {/* Mobile: compact actions + hamburger */}
             <div className='flex shrink-0 items-center gap-2 lg:hidden'>
+              {showLanguageSwitcher && <LanguageSwitcher />}
               {showThemeSwitch && <ThemeSwitch />}
+              {props.rightContent}
               {showAuthButtons && !loading && isAuthenticated && (
                 <ProfileDropdown />
               )}
