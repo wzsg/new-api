@@ -22,6 +22,11 @@ export const HOME_NS = 'myclaude-home'
 
 const translations = {
   en: {
+    Recommended: 'Recommended',
+    'USD / month': 'USD / month',
+    '{{amount}} in API credit per month': '{{amount}} in API credit per month',
+    'Use any available Claude model at MyClaude rates. Unused credit expires at the end of the month.':
+      'Use any available Claude model at MyClaude rates. Unused credit expires at the end of the month.',
     'Model pricing': 'Model pricing',
     'Compare model prices': 'Compare model prices',
     'Pay as you go': 'Pay as you go',
@@ -58,6 +63,11 @@ const translations = {
     'Contact support': 'Contact support',
   },
   zhCN: {
+    Recommended: '推荐',
+    'USD / month': '美元 / 月',
+    '{{amount}} in API credit per month': '每月含 {{amount}} API 额度',
+    'Use any available Claude model at MyClaude rates. Unused credit expires at the end of the month.':
+      '可使用所有已上线的 Claude 模型，按 MyClaude 价格扣减。未用完的额度到期清零。',
     'Model pricing': '模型价格',
     'Compare model prices': '模型价格对比',
     'Pay as you go': '按量计费',
@@ -92,6 +102,11 @@ const translations = {
     'Contact support': '联系客服',
   },
   zhTW: {
+    Recommended: '推薦',
+    'USD / month': '美元 / 月',
+    '{{amount}} in API credit per month': '每月含 {{amount}} API 額度',
+    'Use any available Claude model at MyClaude rates. Unused credit expires at the end of the month.':
+      '可使用所有已上線的 Claude 模型，按 MyClaude 費率扣減。未用完的額度到期清零。',
     'Model pricing': '模型價格',
     'Compare model prices': '模型價格比較',
     'Pay as you go': '按量計費',
@@ -126,6 +141,11 @@ const translations = {
     'Contact support': '聯絡客服',
   },
   fr: {
+    Recommended: 'Recommandé',
+    'USD / month': 'USD / mois',
+    '{{amount}} in API credit per month': '{{amount}} de crédit API par mois',
+    'Use any available Claude model at MyClaude rates. Unused credit expires at the end of the month.':
+      'Utilisez les modèles Claude disponibles aux tarifs MyClaude. Le crédit restant expire à la fin de la période mensuelle.',
     'Model pricing': 'Tarifs des modèles',
     'Compare model prices': 'Comparer les tarifs',
     'Pay as you go': 'Facturation à l’usage',
@@ -162,6 +182,11 @@ const translations = {
     'Contact support': 'Contacter l’assistance',
   },
   ru: {
+    Recommended: 'Рекомендуем',
+    'USD / month': 'USD / месяц',
+    '{{amount}} in API credit per month': '{{amount}} на API в месяц',
+    'Use any available Claude model at MyClaude rates. Unused credit expires at the end of the month.':
+      'Используйте доступные модели Claude по тарифам MyClaude. Остаток сгорает в конце месячного периода.',
     'Model pricing': 'Цены моделей',
     'Compare model prices': 'Сравнение цен',
     'Pay as you go': 'Оплата по факту',
@@ -197,6 +222,11 @@ const translations = {
     'Contact support': 'Связаться с поддержкой',
   },
   ja: {
+    Recommended: 'おすすめ',
+    'USD / month': 'USD / 月',
+    '{{amount}} in API credit per month': '毎月 {{amount}} の API クレジット',
+    'Use any available Claude model at MyClaude rates. Unused credit expires at the end of the month.':
+      '利用可能な Claude モデルを MyClaude の料金で使えます。未使用分は月間利用期間の終了時に失効します。',
     'Model pricing': 'モデル料金',
     'Compare model prices': 'モデル料金の比較',
     'Pay as you go': '従量課金',
@@ -231,6 +261,11 @@ const translations = {
     'Contact support': 'サポートに問い合わせる',
   },
   vi: {
+    Recommended: 'Đề xuất',
+    'USD / month': 'USD / tháng',
+    '{{amount}} in API credit per month': '{{amount}} tín dụng API mỗi tháng',
+    'Use any available Claude model at MyClaude rates. Unused credit expires at the end of the month.':
+      'Dùng các mô hình Claude hiện có theo giá MyClaude. Tín dụng còn lại hết hạn vào cuối kỳ tháng.',
     'Model pricing': 'Giá mô hình',
     'Compare model prices': 'So sánh giá mô hình',
     'Pay as you go': 'Trả theo mức sử dụng',

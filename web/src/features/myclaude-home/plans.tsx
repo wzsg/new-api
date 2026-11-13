@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { toIntlLocale } from '@/i18n/languages'
@@ -30,18 +31,21 @@ const plans = [
   {
     name: 'Pro',
     price: 20,
+    credit: 22,
     label: 'Light use',
     description: 'Occasional use with smaller requests.',
   },
   {
     name: 'Max',
     price: 100,
+    credit: 120,
     label: 'Frequent use',
     description: 'Regular use with more requests throughout the day.',
   },
   {
     name: 'Ultra',
     price: 200,
+    credit: 250,
     label: 'Intensive use',
     description: 'Extended use with larger requests.',
   },
@@ -68,6 +72,11 @@ export function SubscriptionPlans() {
       <h2 id='plans-heading' className='mb-6 text-3xl font-bold tracking-tight'>
         {t('Subscription plans')}
       </h2>
+      <p className='text-muted-foreground -mt-3 mb-6 text-sm'>
+        {t(
+          'Use any available Claude model at MyClaude rates. Unused credit expires at the end of the month.'
+        )}
+      </p>
       <div className='grid gap-4 md:grid-cols-3'>
         {plans.map((plan) => {
           const featured = plan.name === 'Max'
@@ -81,7 +90,10 @@ export function SubscriptionPlans() {
               )}
             >
               <div>
-                <h3 className='text-3xl font-bold'>{plan.name}</h3>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <h3 className='text-3xl font-bold'>{plan.name}</h3>
+                  {featured && <Badge>{t('Recommended')}</Badge>}
+                </div>
                 <p className='mt-1 text-sm font-semibold'>{t(plan.label)}</p>
               </div>
               <p
@@ -92,8 +104,13 @@ export function SubscriptionPlans() {
               >
                 {priceFormat.format(plan.price)}{' '}
                 <span className='text-muted-foreground text-sm font-normal'>
-                  USD
+                  {t('USD / month')}
                 </span>
+              </p>
+              <p className='text-sm font-semibold'>
+                {t('{{amount}} in API credit per month', {
+                  amount: priceFormat.format(plan.credit),
+                })}
               </p>
               <p className='text-muted-foreground flex-1 text-sm'>
                 {t(plan.description)}
@@ -101,7 +118,7 @@ export function SubscriptionPlans() {
               <Button
                 size='lg'
                 variant={featured ? 'default' : 'outline'}
-                render={<Link to='/subscriptions' />}
+                render={<Link to='/wallet' hash='wallet-subscriptions' />}
               >
                 {t('Choose {{plan}}', { plan: plan.name })}
               </Button>
