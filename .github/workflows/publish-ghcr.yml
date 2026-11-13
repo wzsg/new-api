@@ -1,0 +1,43 @@
+name: Publish New API to GHCR
+
+on:
+  push:
+    branches: [build-ghcr]
+    paths: [.github/workflows/publish-ghcr.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    if: github.repository == 'wzsg/new-api'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: v1.0.0-rc.49
+      SOURCE_COMMIT: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+      IMAGE: ghcr.io/wzsg/new-api
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          persist-credentials: false
+
+      - name: Build image
+        run: |
+          printf '%s\n' "$VERSION" > VERSION
+          docker build --platform linux/amd64 \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=$SOURCE_COMMIT" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            --tag "$IMAGE:$VERSION" .
+
+      - name: Push image
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE:$VERSION"
+          docker logout ghcr.io
