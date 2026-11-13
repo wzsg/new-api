@@ -30,8 +30,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { toIntlLocale } from '@/i18n/languages'
+import { cn } from '@/lib/utils'
 
 import { HOME_NS } from './i18n'
 
@@ -41,10 +43,12 @@ const rates = [
   { model: 'Haiku 4.5', input: 1, output: 5 },
 ]
 const discount = 0.5
+const priceLabels = ['Input', 'Output'] as const
 
 export function ModelPricing() {
   const { t, i18n } = useTranslation([HOME_NS, 'translation'])
   const { currency } = useSystemConfig()
+  const compact = useMediaQuery('(width < 40rem)')
   const [displayCurrency, setDisplayCurrency] = useState<'USD' | 'CNY'>('USD')
   const locale = toIntlLocale(i18n.resolvedLanguage)
   const rate = currency.usdExchangeRate
@@ -64,8 +68,8 @@ export function ModelPricing() {
       id='model-prices'
       className='bg-card/95 min-w-0 scroll-mt-24 gap-0 border-blue-200/70 py-0 shadow-xl shadow-indigo-500/10 dark:border-blue-400/20'
     >
-      <CardHeader className='flex flex-wrap items-center justify-between gap-4 p-5 sm:p-7'>
-        <h2 id='comparison-heading' className='text-xl font-bold sm:text-2xl'>
+      <CardHeader className='flex flex-wrap items-center justify-between gap-2 px-3 py-4 sm:gap-4 sm:p-7'>
+        <h2 id='comparison-heading' className='text-lg font-bold sm:text-2xl'>
           {t('Compare model prices')}
         </h2>
         <ToggleGroup
@@ -82,72 +86,123 @@ export function ModelPricing() {
               key={code}
               value={code}
               disabled={code === 'CNY' && !canConvert}
-              className='data-[pressed]:bg-primary data-[pressed]:text-primary-foreground h-8 min-w-14 rounded-full!'
+              className='data-[pressed]:bg-primary data-[pressed]:text-primary-foreground h-8 min-w-11 rounded-full! sm:min-w-14'
             >
               {code}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
       </CardHeader>
-      <CardContent className='px-4 pb-5 sm:px-7 sm:pb-7'>
+      <CardContent className='px-3 pb-4 sm:px-7 sm:pb-7'>
         <div
-          className='focus-visible:outline-ring overflow-x-auto rounded-md focus-visible:outline-2'
-          tabIndex={0}
+          className={cn(
+            'rounded-md',
+            !compact &&
+              'focus-visible:outline-ring overflow-x-auto focus-visible:outline-2'
+          )}
+          tabIndex={compact ? undefined : 0}
           role='region'
           aria-labelledby='comparison-heading'
         >
           <Table
             withContainer={false}
-            className='min-w-105'
+            className={
+              compact
+                ? 'table-fixed [&_td]:text-xs [&_th]:text-xs'
+                : 'min-w-105'
+            }
             aria-labelledby='comparison-heading'
           >
             <TableHeader className='bg-muted/35'>
               <TableRow>
-                <TableHead rowSpan={2} scope='col' className='font-semibold'>
+                <TableHead
+                  rowSpan={2}
+                  scope='col'
+                  className={cn(
+                    'font-semibold',
+                    compact && 'w-2/5 px-1.5 whitespace-normal'
+                  )}
+                >
                   {t('Model', { ns: 'translation' })}
                 </TableHead>
-                <TableHead colSpan={2} scope='colgroup' className='text-center'>
-                  {t('Anthropic list price')}
-                </TableHead>
-                <TableHead colSpan={2} scope='colgroup' className='text-center'>
+                {!compact && (
+                  <TableHead
+                    colSpan={2}
+                    scope='colgroup'
+                    className='text-center'
+                  >
+                    {t('Anthropic list price')}
+                  </TableHead>
+                )}
+                <TableHead
+                  colSpan={2}
+                  scope='colgroup'
+                  className={cn(
+                    'text-center',
+                    compact && 'h-8 px-1 whitespace-normal'
+                  )}
+                >
                   MyClaude <Badge className='ml-1'>{t('50% off')}</Badge>
                 </TableHead>
               </TableRow>
               <TableRow>
-                {[
-                  'official-input',
-                  'official-output',
-                  'site-input',
-                  'site-output',
-                ].map((column) => (
-                  <TableHead key={column} scope='col' className='text-center'>
-                    {t(column.endsWith('input') ? 'Input' : 'Output', {
-                      ns: 'translation',
-                    })}
-                  </TableHead>
-                ))}
+                {(compact ? ['site'] : ['official', 'site']).map((group) =>
+                  priceLabels.map((label) => (
+                    <TableHead
+                      key={`${group}-${label}`}
+                      scope='col'
+                      className={cn(
+                        'text-center',
+                        compact && 'h-7 px-1 whitespace-normal'
+                      )}
+                    >
+                      {t(label, { ns: 'translation' })}
+                    </TableHead>
+                  ))
+                )}
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className={compact ? '[&>tr]:h-auto' : undefined}>
               {rates.map(({ model, input, output }) => (
                 <TableRow key={model}>
-                  <TableHead scope='row' className='font-semibold'>
+                  <TableHead
+                    scope='row'
+                    className={cn(
+                      'font-semibold',
+                      compact && 'px-1.5 whitespace-normal'
+                    )}
+                  >
                     {model}
                   </TableHead>
+                  {!compact &&
+                    Object.entries({ input, output }).map(([kind, price]) => (
+                      <TableCell
+                        key={kind}
+                        className='text-muted-foreground text-center'
+                      >
+                        <s>{format(price)}</s>
+                      </TableCell>
+                    ))}
                   {Object.entries({ input, output }).map(([kind, price]) => (
                     <TableCell
                       key={kind}
-                      className='text-muted-foreground text-center'
+                      className={cn(
+                        'text-center',
+                        compact &&
+                          'px-1 py-1.5 whitespace-normal [overflow-wrap:anywhere]'
+                      )}
                     >
-                      <s>{format(price)}</s>
-                    </TableCell>
-                  ))}
-                  {Object.entries({ input, output }).map(([kind, price]) => (
-                    <TableCell
-                      key={kind}
-                      className='text-center font-bold! text-blue-700 dark:text-blue-300'
-                    >
-                      {format(price * discount)}
+                      {compact && (
+                        <s className='text-muted-foreground block'>
+                          <span className='sr-only'>
+                            {t('Anthropic list price')}{' '}
+                          </span>
+                          {format(price)}
+                        </s>
+                      )}
+                      <strong className='font-bold! text-blue-700 dark:text-blue-300'>
+                        {format(price * discount)}
+                      </strong>
                     </TableCell>
                   ))}
                 </TableRow>

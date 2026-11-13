@@ -21,7 +21,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
 import { act } from 'react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 
 import {
   DEFAULT_CURRENCY_CONFIG,
@@ -74,5 +74,43 @@ it('converts list and discounted prices together without changing the language',
     'tabindex',
     '0'
   )
+  client.clear()
+})
+
+it('pairs list and discounted prices in each input and output cell on narrow screens', async () => {
+  const matchMedia = window.matchMedia
+  vi.spyOn(window, 'matchMedia').mockImplementation((query) =>
+    query === '(width < 40rem)'
+      ? { ...matchMedia(query), matches: true }
+      : matchMedia(query)
+  )
+  registerHomeTranslations(i18n)
+  await i18n.changeLanguage('en')
+  useSystemConfigStore.getState().setConfig({
+    currency: { ...DEFAULT_CURRENCY_CONFIG, usdExchangeRate: 7 },
+  })
+  const user = userEvent.setup()
+  const client = new QueryClient()
+  render(
+    <QueryClientProvider client={client}>
+      <ModelPricing />
+    </QueryClientProvider>
+  )
+
+  const table = screen.getByRole('table', { name: 'Compare model prices' })
+  const row = within(table).getByRole('row', { name: /^Opus 4\.5 / })
+  const [input, output] = within(row).getAllByRole('cell')
+  expect(within(row).getAllByRole('cell')).toHaveLength(2)
+  expect(within(input).getByText('$5.00').tagName).toBe('S')
+  expect(within(input).getByText('$2.50')).toBeVisible()
+  expect(within(output).getByText('$25.00').tagName).toBe('S')
+  expect(within(output).getByText('$12.50')).toBeVisible()
+  expect(
+    screen.getByRole('region', { name: 'Compare model prices' })
+  ).not.toHaveAttribute('tabindex')
+
+  await user.click(screen.getByRole('button', { name: 'CNY' }))
+  expect(within(output).getByText('¥175.00').tagName).toBe('S')
+  expect(within(output).getByText('¥87.50')).toBeVisible()
   client.clear()
 })
