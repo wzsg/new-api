@@ -18,17 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute } from '@tanstack/react-router'
 
-import { Home } from '@/features/home'
 import { MyClaudeHome } from '@/features/myclaude-home'
-import { useStatus } from '@/hooks/use-status'
 
 export const Route = createFileRoute('/')({
-  component: SiteHome,
+  component: MyClaudeHome,
 })
-
-function SiteHome() {
-  const { status, loading } = useStatus()
-  if (status?.system_name === 'MY28') return <Home />
-  if (loading) return <Home />
-  return <MyClaudeHome />
-}
