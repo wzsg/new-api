@@ -26,6 +26,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -40,14 +41,39 @@ afterEach(async () => {
   await i18n.changeLanguage('en')
 })
 
-it('renders the shared landing page for MY28 with its own brand and API key entry', async () => {
+it('shows configured MY28 prices and both context tiers in USD and CNY', async () => {
   await i18n.changeLanguage('en')
-  vi.spyOn(api, 'get').mockImplementation(async (url) => ({
-    data: {
-      success: true,
-      data: url === '/api/status' ? { system_name: 'MY28' } : '',
+  const status = {
+    system_name: 'MY28',
+    usd_exchange_rate: 7,
+    HeaderNavModules: JSON.stringify({
+      pricing: { enabled: true, requireAuth: false },
+    }),
+  }
+  const pricing = [
+    {
+      model_name: 'claude-haiku-5-5',
+      billing_mode: 'tiered_expr',
+      billing_expr:
+        'len > 100000 ? tier("long", p * 0.7 + c * 3.5) : tier("base", p * 0.2 + c * 0.8)',
+      enable_groups: ['default'],
     },
-  }))
+  ]
+  vi.spyOn(api, 'get').mockImplementation(async (url) => {
+    if (url === '/api/pricing') {
+      return {
+        data: {
+          success: true,
+          data: pricing,
+          vendors: [],
+          group_ratio: { default: 1 },
+        },
+      }
+    }
+    return {
+      data: { success: true, data: url === '/api/status' ? status : '' },
+    }
+  })
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   const root = createRootRoute({ component: Outlet })
   const home = createRoute({
@@ -76,7 +102,17 @@ it('renders the shared landing page for MY28 with its own brand and API key entr
       await screen.findByRole('heading', { name: /MY28.*Pay as you go/ })
     ).toBeVisible()
     expect(screen.getByText('Get an API key')).toHaveAttribute('href', '/keys')
-    expect(screen.queryByText('Compare model prices')).toBeNull()
+    expect(
+      await screen.findByRole('table', { name: 'Compare model prices' })
+    ).toBeVisible()
+    expect(screen.getByText('$3.50')).toBeVisible()
+    expect(screen.getByText('$0.80')).toBeVisible()
+    expect(screen.getByText('Context > 100,000')).toBeVisible()
+    expect(screen.getByText('Other cases')).toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: 'CNY' }))
+    expect(screen.getByText('¥24.50')).toBeVisible()
+    expect(screen.getByText('¥5.60')).toBeVisible()
+    expect(screen.queryByText('50% off')).toBeNull()
     expect(screen.queryByText('Subscription plans')).toBeNull()
   } finally {
     client.clear()

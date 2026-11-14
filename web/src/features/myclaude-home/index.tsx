@@ -32,10 +32,11 @@ import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import i18n from '@/i18n/config'
 import { getLobeIcon } from '@/lib/lobe-icon'
+import { getModuleAccessFromStatus } from '@/lib/nav-modules'
 
 import { HOME_NS, registerHomeTranslations } from './i18n'
 import { SubscriptionPlans } from './plans'
-import { ModelPricing } from './pricing'
+import { LiveModelPricing, ModelPricing } from './pricing'
 
 registerHomeTranslations(i18n)
 
@@ -69,6 +70,10 @@ function LandingPage(props: LandingPageProps) {
   const { t } = useTranslation([HOME_NS, 'translation'])
   const { status } = useStatus()
   const { logo } = useSystemConfig()
+  const pricing = getModuleAccessFromStatus(status, 'pricing')
+  const showLivePricing =
+    !props.showClaudeOffers && pricing.enabled && !pricing.requireAuth
+  const showPricing = props.showClaudeOffers || showLivePricing
   const docsUrl =
     typeof status?.docs_link === 'string' && status.docs_link
       ? status.docs_link
@@ -127,7 +132,7 @@ function LandingPage(props: LandingPageProps) {
         showAuthButtons: false,
       }}
       navLinks={
-        props.showClaudeOffers
+        showPricing
           ? [{ title: t('Model pricing'), href: '/#model-prices' }, docsLink]
           : [docsLink]
       }
@@ -144,7 +149,7 @@ function LandingPage(props: LandingPageProps) {
                 {t('Pay as you go')}
               </h1>
               <p className='text-muted-foreground mt-4 max-w-md'>
-                {props.showClaudeOffers
+                {showPricing
                   ? t('Compare input and output costs per million tokens.')
                   : t('Vast Range of AI Models', { ns: 'translation' })}
               </p>
@@ -152,9 +157,9 @@ function LandingPage(props: LandingPageProps) {
                 {t('Get an API key')}
               </Button>
             </div>
-            {props.showClaudeOffers ? (
-              <ModelPricing />
-            ) : (
+            {props.showClaudeOffers && <ModelPricing />}
+            {showLivePricing && <LiveModelPricing siteName={props.siteName} />}
+            {!showPricing && (
               <GatewayCard logo={logo} systemName={props.siteName} />
             )}
           </div>
