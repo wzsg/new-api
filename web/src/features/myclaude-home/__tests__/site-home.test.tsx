@@ -25,7 +25,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -99,8 +99,9 @@ it('shows configured MY28 prices and both context tiers in USD and CNY', async (
     )
 
     expect(
-      await screen.findByRole('heading', { name: /MY28.*Pay as you go/ })
+      await screen.findByRole('heading', { name: /Claude API.*Pay as you go/ })
     ).toBeVisible()
+    expect(within(screen.getByRole('banner')).getByTitle('MY28')).toBeVisible()
     expect(screen.getByText('Get an API key')).toHaveAttribute('href', '/keys')
     expect(
       await screen.findByRole('table', { name: 'Compare model prices' })

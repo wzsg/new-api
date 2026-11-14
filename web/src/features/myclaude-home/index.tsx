@@ -143,7 +143,7 @@ function LandingPage(props: LandingPageProps) {
             <div>
               <h1 className='text-4xl leading-tight font-bold tracking-tight sm:text-5xl'>
                 <span className='bg-linear-to-r from-blue-700 to-violet-700 bg-clip-text text-transparent dark:from-sky-300 dark:to-violet-300'>
-                  {props.showClaudeOffers ? 'Claude API' : props.siteName}
+                  Claude API
                 </span>
                 <br />
                 {t('Pay as you go')}
