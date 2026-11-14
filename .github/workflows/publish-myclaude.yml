@@ -13,7 +13,7 @@ jobs:
     if: github.repository == 'wzsg/new-api'
     runs-on: ubuntu-latest
     env:
-      UPSTREAM_VERSION: v1.0.0-rc.49
+      UPSTREAM_VERSION: v1.0.0-rc.51
       IMAGE: ghcr.io/wzsg/new-api-myclaude
     steps:
       - name: Check out the MyClaude commit

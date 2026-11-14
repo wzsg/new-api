@@ -251,10 +251,15 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 					if tc.realtimeUsage != nil {
 						first := &dto.RealtimeUsage{InputTokens: 100, TotalTokens: 100,
 							InputTokenDetails: dto.InputTokenDetails{TextTokens: 50, AudioTokens: 50}}
-						require.NoError(t, ReserveRealtimeExpressionUsage(ctx, info, first))
-						assert.Equal(t, 1125, info.Billing.GetPreConsumedQuota())
-						require.NoError(t, ReserveRealtimeExpressionUsage(ctx, info, tc.realtimeUsage))
-						require.NoError(t, ReserveRealtimeExpressionUsage(ctx, info, tc.realtimeUsage))
+						firstQuota, err := ReserveRealtimeExpressionUsage(ctx, info, first)
+						require.NoError(t, err)
+						assert.Equal(t, 1125, firstQuota)
+						assert.Equal(t, firstQuota, info.Billing.GetPreConsumedQuota())
+						for range 2 {
+							totalQuota, err := ReserveRealtimeExpressionUsage(ctx, info, tc.realtimeUsage)
+							require.NoError(t, err)
+							assert.Equal(t, tc.want, totalQuota)
+						}
 						assert.Equal(t, tc.want, info.Billing.GetPreConsumedQuota())
 						PostWssConsumeQuota(ctx, info, info.OriginModelName, tc.realtimeUsage, nil)
 					} else if tc.realtime {

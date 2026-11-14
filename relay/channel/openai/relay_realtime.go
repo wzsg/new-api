@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relay/requestplugin"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
@@ -36,9 +37,43 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 	var usageMu sync.Mutex
 	finished := false
 	var reservationFailed bool
+	var expressionTotal int
 	usage := &dto.RealtimeUsage{}
 	localUsage := &dto.RealtimeUsage{}
 	sumUsage := &dto.RealtimeUsage{}
+
+	// The request plugins answer the client and cancel upstream responses
+	// from either reader, so each socket takes one writer at a time.
+	var clientWriteMu, targetWriteMu sync.Mutex
+	writeClient := func(message []byte) error {
+		clientWriteMu.Lock()
+		defer clientWriteMu.Unlock()
+		return helper.WssString(c, clientConn, string(message))
+	}
+	writeTarget := func(message []byte) error {
+		targetWriteMu.Lock()
+		defer targetWriteMu.Unlock()
+		return helper.WssString(c, targetConn, string(message))
+	}
+	plugins := requestplugin.NewRealtime(c, info, func(message []byte) {
+		if err := writeClient(message); err != nil {
+			select {
+			case errChan <- fmt.Errorf("error writing to client: %v", err):
+			default:
+			}
+		}
+	}, func(message []byte) {
+		if err := writeTarget(message); err != nil {
+			select {
+			case errChan <- fmt.Errorf("error writing to target: %v", err):
+			default:
+			}
+		}
+	})
+	if plugins != nil {
+		// The consume log reads what the plugins did once the session ends.
+		defer plugins.Close(info)
+	}
 
 	gopool.Go(func() {
 		defer func() {
@@ -65,6 +100,19 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 				if err != nil {
 					errChan <- fmt.Errorf("error unmarshalling message: %v", err)
 					return
+				}
+				if plugins != nil {
+					patched, dropped := plugins.ClientEvent(realtimeEvent.Type, message)
+					if dropped {
+						continue
+					}
+					if patched != nil {
+						message, realtimeEvent = patched, &dto.RealtimeEvent{}
+						if err = common.Unmarshal(message, realtimeEvent); err != nil {
+							errChan <- fmt.Errorf("error unmarshalling message: %v", err)
+							return
+						}
+					}
 				}
 
 				err = func() error {
@@ -99,7 +147,7 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 					return
 				}
 
-				err = helper.WssString(c, targetConn, string(message))
+				err = writeTarget(message)
 				if err != nil {
 					errChan <- fmt.Errorf("error writing to target: %v", err)
 					return
@@ -139,6 +187,7 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 					return
 				}
 
+				quota := 0
 				err = func() error {
 					usageMu.Lock()
 					defer usageMu.Unlock()
@@ -160,7 +209,7 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 							usage.InputTokenDetails.TextTokens += realtimeUsage.InputTokenDetails.TextTokens
 							usage.OutputTokenDetails.AudioTokens += realtimeUsage.OutputTokenDetails.AudioTokens
 							usage.OutputTokenDetails.TextTokens += realtimeUsage.OutputTokenDetails.TextTokens
-							err := preConsumeUsage(c, info, usage, sumUsage)
+							quota, err = preConsumeUsage(c, info, usage, sumUsage, &expressionTotal)
 							if err != nil {
 								reservationFailed = true
 								return fmt.Errorf("error consume usage: %v", err)
@@ -180,7 +229,7 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 							localUsage.InputTokens += textToken + audioToken
 							localUsage.InputTokenDetails.TextTokens += textToken
 							localUsage.InputTokenDetails.AudioTokens += audioToken
-							err = preConsumeUsage(c, info, localUsage, sumUsage)
+							quota, err = preConsumeUsage(c, info, localUsage, sumUsage, &expressionTotal)
 							if err != nil {
 								reservationFailed = true
 								return fmt.Errorf("error consume usage: %v", err)
@@ -219,8 +268,13 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 					return
 				}
 
-				err = helper.WssString(c, clientConn, string(message))
-				if err != nil {
+				if plugins != nil {
+					var responseUsage *dto.RealtimeUsage
+					if realtimeEvent.Response != nil {
+						responseUsage = realtimeEvent.Response.Usage
+					}
+					plugins.ServerEvent(realtimeEvent.Type, message, responseUsage, quota)
+				} else if err = writeClient(message); err != nil {
 					errChan <- fmt.Errorf("error writing to client: %v", err)
 					return
 				}
@@ -247,19 +301,19 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 	finished = true
 	if info.TieredBillingSnapshot == nil || !reservationFailed {
 		if usage.TotalTokens != 0 {
-			_ = preConsumeUsage(c, info, usage, sumUsage)
+			_, _ = preConsumeUsage(c, info, usage, sumUsage, &expressionTotal)
 		}
 		if localUsage.TotalTokens != 0 {
-			_ = preConsumeUsage(c, info, localUsage, sumUsage)
+			_, _ = preConsumeUsage(c, info, localUsage, sumUsage, &expressionTotal)
 		}
 	}
 
 	return nil, sumUsage
 }
 
-func preConsumeUsage(ctx *gin.Context, info *relaycommon.RelayInfo, usage *dto.RealtimeUsage, totalUsage *dto.RealtimeUsage) error {
+func preConsumeUsage(ctx *gin.Context, info *relaycommon.RelayInfo, usage, totalUsage *dto.RealtimeUsage, expressionTotal *int) (int, error) {
 	if usage == nil || totalUsage == nil {
-		return fmt.Errorf("invalid usage pointer")
+		return 0, fmt.Errorf("invalid usage pointer")
 	}
 
 	next := *totalUsage
@@ -276,14 +330,17 @@ func preConsumeUsage(ctx *gin.Context, info *relaycommon.RelayInfo, usage *dto.R
 			usage.InputTokenDetails.CachedTokens, usage.InputTokenDetails.TextTokens, usage.InputTokenDetails.AudioTokens,
 			usage.OutputTokenDetails.TextTokens, usage.OutputTokenDetails.AudioTokens} {
 			if count < 0 || count > common.MaxQuota {
-				return fmt.Errorf("invalid realtime usage token count")
+				return 0, fmt.Errorf("invalid realtime usage token count")
 			}
 		}
-		if err := service.ReserveRealtimeExpressionUsage(ctx, info, &next); err != nil {
-			return err
+		quota, err := service.ReserveRealtimeExpressionUsage(ctx, info, &next)
+		if err != nil {
+			return 0, err
 		}
+		delta := max(0, quota-*expressionTotal)
+		*expressionTotal = quota
 		*totalUsage = next
-		return nil
+		return delta, nil
 	}
 	*totalUsage = next
 	return service.PreWssConsumeQuota(ctx, info, usage)
