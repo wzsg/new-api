@@ -85,6 +85,50 @@ func calculateAudioQuota(info QuotaInfo) (int, *common.QuotaClamp) {
 	return common.QuotaFromDecimalChecked(quota)
 }
 
+func realtimeBillingParams(info *relaycommon.RelayInfo, usage *dto.RealtimeUsage) billingexpr.TokenParams {
+	snap := info.TieredBillingSnapshot
+	return BuildTieredTokenParams(&dto.Usage{
+		PromptTokens:           usage.InputTokens,
+		CompletionTokens:       usage.OutputTokens,
+		PromptTokensDetails:    usage.InputTokenDetails,
+		CompletionTokenDetails: usage.OutputTokenDetails,
+	}, false, billingexpr.UsedVarsByHash(snap.ExprString, snap.ExprHash))
+}
+
+// ReserveRealtimeExpressionUsage reserves the cumulative cost from the same
+// snapshot used at close. Reserving the total avoids rounding each event and
+// keeps incremental charges in the session's wallet or subscription.
+func ReserveRealtimeExpressionUsage(ctx *gin.Context, info *relaycommon.RelayInfo, total *dto.RealtimeUsage) error {
+	snapshot := info.TieredBillingSnapshot
+	if snapshot.GroupRatio == 0 {
+		return nil
+	}
+	request := billingexpr.RequestInput{}
+	if info.BillingRequestInput != nil {
+		request = *info.BillingRequestInput
+	}
+	result, err := billingexpr.ComputeTieredQuotaWithRequest(snapshot, realtimeBillingParams(info, total), request)
+	if err != nil {
+		return err
+	}
+	if result.Clamp != nil {
+		noteQuotaClamp(info, result.Clamp)
+		return result.Clamp
+	}
+	if result.ActualQuotaBeforeGroup < 0 {
+		return fmt.Errorf("negative realtime billing expression result")
+	}
+	if info.Billing == nil {
+		if result.ActualQuotaAfterGroup == 0 {
+			return nil
+		}
+		if apiErr := PreConsumeBilling(ctx, 0, info); apiErr != nil {
+			return apiErr
+		}
+	}
+	return info.Billing.ReserveBeforeSubmit(result.ActualQuotaAfterGroup)
+}
+
 func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.RealtimeUsage) error {
 	if relayInfo.UsePrice {
 		return nil
@@ -157,14 +201,11 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, modelName string,
 	usage *dto.RealtimeUsage, extraContent []*common.Message) {
 
+	var tiered bool
+	var tieredQuota int
 	var tieredResult *billingexpr.TieredResult
-	tieredOk, tieredQuota, tieredRes := TryTieredSettle(relayInfo, billingexpr.TokenParams{
-		P:   float64(usage.InputTokens),
-		C:   float64(usage.OutputTokens),
-		Len: float64(usage.InputTokens),
-	})
-	if tieredOk {
-		tieredResult = tieredRes
+	if relayInfo.TieredBillingSnapshot != nil {
+		tiered, tieredQuota, tieredResult = TryTieredSettle(relayInfo, realtimeBillingParams(relayInfo, usage))
 	}
 
 	useTimeSeconds := time.Now().Unix() - relayInfo.StartTime.Unix()
@@ -199,10 +240,11 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 		GroupRatio: groupRatio,
 	}
 
-	quota, clamp := calculateAudioQuota(quotaInfo)
-	noteQuotaClamp(relayInfo, clamp)
-	if tieredOk {
-		quota = tieredQuota
+	quota := tieredQuota
+	if !tiered {
+		legacyQuota, clamp := calculateAudioQuota(quotaInfo)
+		quota = legacyQuota
+		noteQuotaClamp(relayInfo, clamp)
 	}
 
 	totalTokens := usage.TotalTokens
@@ -243,7 +285,7 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 	logContent = append(logContent, extraContent...)
 	other := GenerateWssOtherInfo(ctx, relayInfo, usage, modelRatio, groupRatio,
 		completionRatio.InexactFloat64(), audioRatio.InexactFloat64(), audioCompletionRatio.InexactFloat64(), modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
-	if tieredResult != nil {
+	if tiered {
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
 	attachQuotaSaturation(ctx, relayInfo, other)

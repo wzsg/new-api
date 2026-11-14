@@ -1076,6 +1076,44 @@ export function parseBatchResult() { return {}; }
 	}
 }
 
+func TestSoraRemixUsageFacts(t *testing.T) {
+	source, err := plugins.Source("sora")
+	require.NoError(t, err)
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+	adaptor := New(plugin)
+
+	for _, tc := range []struct {
+		name, data string
+		seconds    float64
+		legacy     bool
+	}{
+		{"historical large remix", `{"seconds":8,"size":"1792x1024","legacy_large_remix":true}`, 8, true},
+		{"current large remix", `{"seconds":"12","size":"1792x1024"}`, 12, false},
+		{"default when the origin has no metering", `{}`, 4, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/videos/task_public/remix", nil)
+			info := &relaycommon.RelayInfo{
+				OriginModelName: "sora-2",
+				ChannelMeta:     &relaycommon.ChannelMeta{},
+				TaskRelayInfo: &relaycommon.TaskRelayInfo{
+					Action:      constant.TaskActionRemix,
+					OriginTasks: []relaycommon.OriginTaskRef{{TaskID: "task_public", Data: []byte(tc.data)}},
+				},
+			}
+			facts, err := adaptor.ExtractUsageFactsValidated(ctx, info)
+			require.NoError(t, err)
+			require.Equal(t, tc.seconds, facts["seconds"])
+			require.Equal(t, tc.legacy, facts["legacy_large_remix"])
+			ratios, err := adaptor.EstimateBillingValidated(ctx, info)
+			require.NoError(t, err)
+			require.Empty(t, ratios)
+		})
+	}
+}
+
 func TestTaskAdaptorPreservesSoraVideoResponseFields(t *testing.T) {
 	source, err := plugins.Source("sora")
 	require.NoError(t, err)

@@ -7,7 +7,7 @@ export const meta = {
     en: "OpenAI Sora video generation (text-to-video, image-to-video, and remix)",
     zh: "OpenAI Sora 视频生成（文生视频、图生视频、remix）",
   },
-  version: "1.1.0",
+  version: "1.1.1",
   channelTypes: [55, 1], // OpenAI-type channels natively serve sora with the same wire format
   author: { name: "QuantumNous" },
   models: ["sora-2", "sora-2-pro"],
@@ -20,6 +20,10 @@ export const meta = {
       type: "number",
       unit: "second",
       description: { en: "Video generation unit price", zh: "视频生成单价" },
+    },
+    legacy_large_remix: {
+      type: "boolean",
+      description: { en: "Large remix from a legacy task", zh: "旧任务的大尺寸重混" },
     },
     // Requested output video dimensions.
     size: {
@@ -99,7 +103,9 @@ export function buildSubmitRequest(ctx) {
   const headers = { Authorization: "Bearer " + ctx.apiKey };
   if (action === "remix") {
     headers["Content-Type"] = "application/json";
-    return { url: ctx.baseUrl + "/v1/videos/" + ctx.originTaskId + "/remix", method: "POST", headers, body: requestValues(req, ctx.upstreamModel), action };
+    const origin = (ctx.originTasks || [])[0];
+    const videoId = (origin && origin.upstreamTaskId) || ctx.originTaskId;
+    return { url: ctx.baseUrl + "/v1/videos/" + encodeURIComponent(videoId) + "/remix", method: "POST", headers, body: requestValues(req, ctx.upstreamModel), action };
   }
   if ((ctx.files || []).length) {
     const parts = [];
@@ -125,11 +131,16 @@ export function parseSubmitResponse(ctx, resp) {
 }
 
 export function extractUsage(ctx) {
-  if (ctx.action === "remix") return {};
-  const req = ctx.requestBody || {};
+  const remix = ctx.action === "remix";
+  if (remix && ctx.usagePurpose === "billing_ratios") return {};
+  const req = remix ? ((ctx.originTasks || [])[0] || {}).data || {} : ctx.requestBody || {};
   let seconds = Number(req.seconds || req.duration || 4);
   if (!Number.isFinite(seconds) || seconds <= 0) seconds = 4;
-  return { seconds: Math.min(seconds, 3600), size: req.size || "720x1280" };
+  let size = req.size || "720x1280";
+  if (remix && !["720x1280", "1280x720", "1792x1024", "1024x1792"].includes(size)) size = "720x1280";
+  const facts = { seconds: Math.min(seconds, 3600), size };
+  if (ctx.usagePurpose !== "billing_ratios") facts.legacy_large_remix = remix && req.legacy_large_remix === true;
+  return facts;
 }
 
 export function extractUsageOnComplete(task, taskResult, body) {

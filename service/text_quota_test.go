@@ -99,6 +99,7 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 	const mixed = `len <= 32000 ? tier("short", fixed(0.01)) : tier("long", p * 2)`
 	const flat = `tier("request", fixed(0.01))`
 	const startingQuota = 2_000_000
+	const realtimeExpression = `tier("realtime", p * 5 + c * 20 + ai * 40 + ao * 40)`
 	const imageExpression = `tier("standard", p * 5 + cr * 1.25 + img * 8 + img_cr * 2 + c * 30)`
 	imageUsage := &dto.Usage{PromptTokens: 1000, CompletionTokens: 100, TotalTokens: 1100,
 		PromptTokensDetails: dto.InputTokenDetails{CachedTokens: 300, ImageTokens: 600, CachedTokensDetails: &dto.CachedTokenDetails{ImageTokens: common.GetPointer(200)}}}
@@ -110,6 +111,7 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 		usage                                     *dto.Usage
 		audio, stream, refund, insufficient, tool bool
 		realtime, reserveInsufficient             bool
+		realtimeUsage                             *dto.RealtimeUsage
 		wallet, outboundImages, retryReservation  int
 		groupRatio                                float64
 		want                                      int
@@ -132,6 +134,12 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 		{name: "image cache stream settles usage and refunds unused reservation", expression: imageExpression, estimate: 10000, usage: imageUsage, stream: true, want: 4113, unit: billingexpr.BillingUnitToken},
 		{name: "audio settlement records image cache billing inputs", expression: imageExpression, estimate: 10000, usage: imageUsage, audio: true, want: 4113, unit: billingexpr.BillingUnitToken},
 		{name: "realtime records actual expression inputs", expression: imageExpression, estimate: 10000, usage: imageUsage, realtime: true, want: 4000, unit: billingexpr.BillingUnitToken},
+		{name: "realtime reserves cumulative audio and text once", expression: realtimeExpression, realtime: true,
+			realtimeUsage: &dto.RealtimeUsage{
+				InputTokens: 1000, OutputTokens: 200, TotalTokens: 1200,
+				InputTokenDetails:  dto.InputTokenDetails{TextTokens: 600, AudioTokens: 400, CachedTokens: 250},
+				OutputTokenDetails: dto.OutputTokenDetails{TextTokens: 100, AudioTokens: 100},
+			}, want: 12500, unit: billingexpr.BillingUnitToken},
 		{name: "image cache insufficient wallet never reserves tokens", expression: imageExpression, estimate: 10000, insufficient: true},
 		{name: "image quantity refunds missing images", expression: `tier("image", fixed(0.04)) * image_count`, requestedImages: 3, actualImages: 2, want: 40000, unit: billingexpr.BillingUnitRequest},
 		{name: "image quantity keeps request when actual missing", expression: `tier("image", fixed(0.04)) * image_count`, requestedImages: 3, want: 60000, unit: billingexpr.BillingUnitRequest},
@@ -240,7 +248,16 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 					if tc.tool {
 						info.ResponsesUsageInfo = &relaycommon.ResponsesUsageInfo{BuiltInTools: map[string]*relaycommon.BuildInToolInfo{"fixed_billing_tool": {CallCount: 1}}}
 					}
-					if tc.realtime {
+					if tc.realtimeUsage != nil {
+						first := &dto.RealtimeUsage{InputTokens: 100, TotalTokens: 100,
+							InputTokenDetails: dto.InputTokenDetails{TextTokens: 50, AudioTokens: 50}}
+						require.NoError(t, ReserveRealtimeExpressionUsage(ctx, info, first))
+						assert.Equal(t, 1125, info.Billing.GetPreConsumedQuota())
+						require.NoError(t, ReserveRealtimeExpressionUsage(ctx, info, tc.realtimeUsage))
+						require.NoError(t, ReserveRealtimeExpressionUsage(ctx, info, tc.realtimeUsage))
+						assert.Equal(t, tc.want, info.Billing.GetPreConsumedQuota())
+						PostWssConsumeQuota(ctx, info, info.OriginModelName, tc.realtimeUsage, nil)
+					} else if tc.realtime {
 						PostWssConsumeQuota(ctx, info, info.OriginModelName, &dto.RealtimeUsage{
 							InputTokens: tc.usage.PromptTokens, OutputTokens: tc.usage.CompletionTokens, TotalTokens: tc.usage.TotalTokens,
 						}, nil)

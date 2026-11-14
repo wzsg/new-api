@@ -116,31 +116,49 @@ func ResolveOriginTask(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskErr
 
 	// 提取 remix 参数（时长、分辨率 → OtherRatios）
 	if info.Action == constant.TaskActionRemix {
-		if originTask.PrivateData.BillingContext != nil {
-			// 新的 remix 逻辑：直接从原始任务的 BillingContext 中提取 OtherRatios（如果存在）
-			for s, f := range originTask.PrivateData.BillingContext.OtherRatios {
-				info.PriceData.AddOtherRatio(s, f)
+		var taskData map[string]any
+		_ = common.Unmarshal(originTask.Data, &taskData)
+		billing := originTask.PrivateData.BillingContext
+		usage := map[string]any{"seconds": taskData["seconds"], "duration": taskData["duration"], "size": taskData["size"]}
+		if billing != nil {
+			for name, ratio := range billing.OtherRatios {
+				info.PriceData.AddOtherRatio(name, ratio)
+			}
+			if billing.TieredSnapshot != nil {
+				facts := billing.TieredSnapshot.UsageFacts
+				for _, key := range []string{"seconds", "size"} {
+					if usage[key] == nil {
+						usage[key] = facts[key]
+					}
+				}
+			} else if seconds := billing.OtherRatios["seconds"]; seconds > 0 {
+				usage["seconds"] = seconds
 			}
 		} else {
-			// 旧的 remix 逻辑：直接从 task data 解析 seconds 和 size（如果存在）
-			var taskData map[string]any
-			_ = common.Unmarshal(originTask.Data, &taskData)
 			secondsStr, _ := taskData["seconds"].(string)
 			seconds, _ := strconv.Atoi(secondsStr)
 			if seconds <= 0 {
 				seconds = 4
 			}
-			// 历史任务数据可能包含未经校验的时长，作为计费乘数前必须钳制
-			if seconds > relaycommon.MaxTaskDurationSeconds {
-				seconds = relaycommon.MaxTaskDurationSeconds
-			}
-			sizeStr, _ := taskData["size"].(string)
+			seconds = min(seconds, relaycommon.MaxTaskDurationSeconds)
+			usage["seconds"] = seconds
+			size, _ := taskData["size"].(string)
+			large := size == "1792x1024" || size == "1024x1792"
+			usage["legacy_large_remix"] = large
 			info.PriceData.AddOtherRatio("seconds", float64(seconds))
 			info.PriceData.AddOtherRatio("size", 1)
-			if sizeStr == "1792x1024" || sizeStr == "1024x1792" {
+			if large {
 				info.PriceData.AddOtherRatio("size", 1.666667)
 			}
 		}
+		encoded, err := common.Marshal(usage)
+		if err != nil {
+			return service.TaskErrorWrapperLocal(err, "task_origin_usage_invalid", http.StatusBadRequest)
+		}
+		info.OriginTasks = []relaycommon.OriginTaskRef{{
+			TaskID: originTask.TaskID, UpstreamTaskID: originTask.GetUpstreamTaskID(),
+			Action: originTask.Action, Status: string(originTask.Status), Data: encoded,
+		}}
 	}
 
 	return nil
