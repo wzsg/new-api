@@ -132,9 +132,9 @@ function LandingPage(props: LandingPageProps) {
         showAuthButtons: false,
       }}
       navLinks={
-        showPricing
+        props.showClaudeOffers
           ? [{ title: t('Model pricing'), href: '/#model-prices' }, docsLink]
-          : [docsLink]
+          : []
       }
     >
       <main>
@@ -217,8 +217,8 @@ function LandingPage(props: LandingPageProps) {
           props.showClaudeOffers ? t('Claude API service') : undefined
         }
         className='bg-muted/35'
-        columns={[
-          ...(props.showClaudeOffers
+        columns={
+          props.showClaudeOffers
             ? [
                 {
                   title: t('Model pricing'),
@@ -230,19 +230,19 @@ function LandingPage(props: LandingPageProps) {
                     },
                   ],
                 },
+                {
+                  title: t('Resources', { ns: 'translation' }),
+                  links: [
+                    { text: t('Integration guide'), href: docsUrl },
+                    ...(typeof statusUrl === 'string' &&
+                    statusUrl.startsWith('https://')
+                      ? [{ text: t('Service status'), href: statusUrl }]
+                      : []),
+                  ],
+                },
               ]
-            : []),
-          {
-            title: t('Resources', { ns: 'translation' }),
-            links: [
-              { text: t('Integration guide'), href: docsUrl },
-              ...(typeof statusUrl === 'string' &&
-              statusUrl.startsWith('https://')
-                ? [{ text: t('Service status'), href: statusUrl }]
-                : []),
-            ],
-          },
-        ]}
+            : []
+        }
       />
       {typeof supportUrl === 'string' && supportUrl.startsWith('https://') && (
         <Button

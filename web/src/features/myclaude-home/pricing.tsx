@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -388,11 +387,6 @@ export function ModelPricing(props: ModelPricingProps = {}) {
               currency: selectedCurrency,
             })}
           </p>
-          {props.rows && (
-            <Link className='text-primary hover:underline' to='/pricing'>
-              {t('Model Square', { ns: 'translation' })}
-            </Link>
-          )}
           <a
             className='text-primary hover:underline'
             href='https://platform.claude.com/docs/en/about-claude/pricing'

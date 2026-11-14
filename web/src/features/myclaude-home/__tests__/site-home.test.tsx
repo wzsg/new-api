@@ -112,6 +112,12 @@ it('shows configured MY28 prices and both context tiers in USD and CNY', async (
     await userEvent.click(screen.getByRole('button', { name: 'CNY' }))
     expect(screen.getByText('¥24.50')).toBeVisible()
     expect(screen.getByText('¥5.60')).toBeVisible()
+    expect(screen.queryByText('Model pricing')).toBeNull()
+    expect(screen.queryByText('Integration guide')).toBeNull()
+    expect(screen.queryByText('Model Square')).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Toggle navigation menu' })
+    ).toBeNull()
     expect(screen.queryByText('50% off')).toBeNull()
     expect(screen.queryByText('Subscription plans')).toBeNull()
   } finally {
